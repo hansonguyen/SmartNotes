@@ -54,3 +54,4 @@ docs/_build/
 /enhanced_notes
 /outputs
 *.json
+.env

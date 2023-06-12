@@ -29,22 +29,32 @@ def thinning_image(image):
 """
 Returns path of processed image ("./images/[filename]_processed.[filetype]")
 Preprocess image in multiple steps:
-1. Binarization
-2. Noise Removal
-3. Thinning/Skeletonization
+1. Normalization
+2. Binarization
+3. Noise Removal
+4. Thinning/Skeletonization
 """
 def image_preprocess(path: str) -> str:
     img = cv.imread(path, cv.IMREAD_GRAYSCALE)
     assert img is not None, "file could not be read, check with os.path.exists()"
-    # 1. Binarization
+
+    # 1. Normalization
+    norm_img = np.zeros((img.shape[0], img.shape[1]))
+    img = cv.normalize(img, norm_img, 0, 255, cv.NORM_MINMAX)
+
+    # 2. Binarization
     img = cv.medianBlur(img, 5)
-    ret,th1 = cv.threshold(img, 127, 255, cv.THRESH_BINARY)
-    # 2. Noise removal
-    th1 = noise_removal(th1)
-    # 3. Thinning/Skeletonization
-    th1 = thinning_image(th1)
-    updatedPath = path.split('/')[0] + '/' + path.split('/')[1] + '/' + path.split('/')[2].split('.')[0] + "_processed." + path.split('/')[2].split('.')[1]
-    cv.imwrite(updatedPath, th1)
+    img = cv.adaptiveThreshold(img,255,cv.ADAPTIVE_THRESH_GAUSSIAN_C,\
+            cv.THRESH_BINARY,11,2)
+
+    # 3. Noise removal
+    img = noise_removal(img)
+    
+    # 4. Thinning/Skeletonization
+    img = thinning_image(img)
+
+    updatedPath = path.split('/')[0] + '/outputs/' + path.split('/')[2].split('.')[0] + "_processed." + path.split('/')[2].split('.')[1]
+    cv.imwrite(updatedPath, img)
     return updatedPath
 
 """
@@ -82,7 +92,7 @@ def detect_document(filename: str) -> str:
     with open(output_file, 'w') as json_file:
         json.dump(json_response, json_file, indent=2)
     print("Finished scanning image")
-    return json_response["full_text_annotation"][0]["text"]
+    return json_response["all_text"]
 
 """
 Returns Cloud Vision response as JSON
@@ -90,6 +100,7 @@ Returns Cloud Vision response as JSON
 def response_to_json(response, path: str) -> Dict[Any, Any]:
     json_response = {}
     json_response['full_text_annotation'] = []
+    json_response['all_text'] = ''
     for page in response.full_text_annotation.pages:
         page_data = {
             'file_name': path.split('/')[2],
@@ -127,6 +138,7 @@ def response_to_json(response, path: str) -> Dict[Any, Any]:
                                   for paragraph in block_data['paragraphs']])
             block_data['text'] = block_text
             page_data['text'] += block_text + '\n'
+            json_response['all_text'] += block_text + '\n'
             page_data['blocks'].append(block_data)
         json_response['full_text_annotation'].append(page_data)
 
